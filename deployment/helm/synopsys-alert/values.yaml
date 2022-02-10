@@ -1,0 +1,123 @@
+# Values for Alert.
+# This is a YAML-formatted file.
+# Declare variables to be passed into your templates.
+
+registry: "docker.io/blackducksoftware"
+
+# Storage configurations
+enablePersistentStorage: true
+storageClass: # it will apply to all PVC's storage class but it can be override at container level
+# enableStandalone deploys a cfssl instance with Alert
+enableStandalone: true
+
+# alert - configurations for the Alert Pod
+alert:
+  imageTag: ALERT_VERSION_TOKEN
+  registry: "" # override the docker registry at container level
+  hostname: localhost
+  port: 8443
+  forwardHeadersStrategy: none # change to "native" if you are using a reverse proxy/load balancer
+  resources:
+    limits:
+      memory: "2560Mi"
+  persistentVolumeClaimName: ""
+  claimSize: "5Gi"
+  storageClass: ""
+  volumeName: ""
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+  securityContext: {}
+  podSecurityContext: {}
+
+# cfssl - configurations for the cfssl Pod
+cfssl:
+  imageTag: 1.0.1
+  registry: "" # override the docker registry at container level
+  resources:
+    limits:
+      memory: "640Mi"
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+  securityContext: {}
+  podSecurityContext: {}
+
+# postgres - configurations for the postgres Pod
+postgres:
+  registry: "docker.io/centos" # override the docker registry at container level
+  isExternal: false # false for running Postgres as a container and true for using External Postgres database
+  ssl: false # If true, Alert uses SSL for external Postgres connection
+  sslUseFiles: false # If true, Alert will expect to find ssl certs for communicating with the External Postgres database
+  sslSecrets: # Secret that contains all the ssl file paths
+    secretName: ""
+    sslKeyKey: "ALERT_DB_SSL_KEY_PATH"
+    sslCertKey: "ALERT_DB_SSL_CERT_PATH"
+    sslRootCertKey: "ALERT_DB_SSL_ROOT_CERT_PATH"
+  host: "" # required only for external postgres, for postgres as a container, it will point to <name>-postgres
+  port: 5432
+  # NOTE: do not change usernames when using postgres as a container; only configure if using external database
+  userUserName: sa
+  userPassword: blackduck
+  databaseName: alertdb
+  adminUserName: postgres
+  adminPassword: ""
+  dbCredential: #Secret that contains both the regular username & password
+    secretName: ""
+    usernameKey: "ALERT_DB_USERNAME"
+    passwordKey: "ALERT_DB_PASSWORD"
+  dbAdminCredential: #Secret that contains both the admin username & password
+    secretName: ""
+    usernameKey: "ALERT_DB_ADMIN_USERNAME"
+    passwordKey: "ALERT_DB_ADMIN_PASSWORD"
+  # pvc related parameters for postgres container
+  persistentVolumeClaimName: "" # set if you want to create your own PVC (used for migration)
+  claimSize: "5Gi" # PVC claim size
+  storageClass: "" # PVC storage class name
+  volumeName: "" # existing persistent volume name backing the PVC
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+  podSecurityContext: {}
+  securityContext: {}
+  resources: {}
+
+# image pull secret to download images (mostly applicable for air gapped customers)
+imagePullSecrets: [] # array of strings delimited by comma
+
+# Used to start or stop the alert instance. Set to "Running" to start, or "Stopped" to stop
+status: Running
+
+# Expose Alert's User Interface
+exposeui: true
+exposedServiceType: NodePort # NodePort | LoadBalancer | OpenShift
+# custom port to expose the NodePort service on
+exposedNodePort: ""
+
+# environs is a map of *additional* environs to add to the Alert's ConfigMap
+# The following environs are already set in the ConfigMap
+# at /templates/alert-environ-configmap.yaml (go there to set them):
+#   HUB_WEBAPP_HOST
+#   HUB_CFSSL_HOST
+#   ALERT_SERVER_PORT
+# if you are setting the value using set flag in helm command, do --set environs.* = ""; i.e.: --set environs.ALERT_CHANNEL_EMAIL_MAIL_SMTP_HOST="email@synopsys.com"
+environs: {}
+
+# secretEnvirons is a map of environs to add to the Alert's Secret
+# if you are setting the value using set flag in helm command, do --set secretEnvirons.* = ""; i.e.: --set secretEnvirons.ALERT_CHANNEL_EMAIL_MAIL_SMTP_HOST="email@synopsys.com"
+secretEnvirons: {}
+
+# If true, requires the user to set...
+#   the value alertEncryptionPassword or the secretEnviron ALERT_ENCRYPTION_PASSWORD
+#   the value alertEncryptionGlobalSalt or the secretEnviron ALERT_ENCRYPTION_GLOBAL_SALT
+setEncryptionSecretData: false
+
+# Alert's certificate information
+webserverCustomCertificatesSecretName: "" # kubectl create secret generic <name>-alert-certificate -n <namespace> --from-file=WEBSERVER_CUSTOM_CERT_FILE=tls.crt --from-file=WEBSERVER_CUSTOM_KEY_FILE=tls.key
+# Note: This secret is still available but not recommended.  Certificates can be imported directly via the user interface.
+javaKeystoreSecretName: ""                # kubectl create secret generic <name>-alert-certificate -n <namespace> --from-file=cacerts
+
+# Set if Alert will be deployed with a Black Duck instance
+deployAlertWithBlackDuck: false
+blackDuckName: ""       # If true, you must provide the ReleaseName of the Black Duck instance
+blackDuckNamespace: ""  # If true, you must provide the Namespace of the Black Duck instance

@@ -1,0 +1,106 @@
+task copyDeploymentFiles(type: Copy) {
+    from('deployment') {
+        include "docker-swarm/**", "helm/synopsys-alert/**"
+    }
+    from('deployment/blackduck-alert.env') {
+        into "docker-swarm/external-db/hub"
+    }
+    from('deployment/blackduck-alert.env') {
+        into "docker-swarm/external-db/standalone"
+    }
+    from('deployment/blackduck-alert.env') {
+        into "docker-swarm/hub"
+    }
+    from('deployment/blackduck-alert.env') {
+        into "docker-swarm/standalone"
+    }
+    into "${project.buildDir}/deployment"
+
+    doLast {
+        ant.replace(file: "${project.buildDir}/deployment/docker-swarm/hub/docker-compose.yml", token: "ALERT_VERSION_TOKEN", value: "${project.version}")
+        ant.replace(file: "${project.buildDir}/deployment/docker-swarm/external-db/hub/docker-compose.yml", token: "ALERT_VERSION_TOKEN", value: "${project.version}")
+        ant.replace(file: "${project.buildDir}/deployment/docker-swarm/standalone/docker-compose.yml", token: "ALERT_VERSION_TOKEN", value: "${project.version}")
+        ant.replace(file: "${project.buildDir}/deployment/docker-swarm/external-db/standalone/docker-compose.yml", token: "ALERT_VERSION_TOKEN", value: "${project.version}")
+        ant.replace(file: "${project.buildDir}/deployment/helm/synopsys-alert/Chart.yaml", token: "ALERT_VERSION_TOKEN", value: "${project.version}")
+        ant.replace(file: "${project.buildDir}/deployment/helm/synopsys-alert/values.yaml", token: "ALERT_VERSION_TOKEN", value: "${project.version}")
+        ant.replace(file: "${project.buildDir}/deployment/helm/synopsys-alert/README.md", token: "ALERT_VERSION_TOKEN", value: "${project.version}")
+    }
+}
+
+task createDeploymentZip(type: Zip, dependsOn: [copyDeploymentFiles]) {
+    from "${project.buildDir}/deployment"
+    into "${project.name}-${project.version}-deployment"
+    baseName "${project.name}"
+    classifier 'deployment'
+}
+
+
+task helmLint(type: Exec) {
+    workingDir = "${project.buildDir}/deployment/helm/synopsys-alert/"
+    commandLine "helm", "lint", "${project.buildDir}/deployment/helm/synopsys-alert/"
+}
+
+task helmDryRun(type: Exec) {
+    workingDir = "${project.buildDir}/deployment/helm/synopsys-alert/"
+    commandLine "helm", "install", "alert", "${project.buildDir}/deployment/helm/synopsys-alert/", "-n", "alert", "--dry-run"
+}
+
+task helmPackage(type: Exec) {
+    workingDir = "${project.buildDir}/deployment/helm/synopsys-alert/"
+    commandLine "helm", "package", "${project.buildDir}/deployment/helm/synopsys-alert/"
+}
+
+task helmValidation(dependsOn: [copyDeploymentFiles, helmLint, helmDryRun, helmPackage]) {
+    helmLint.mustRunAfter copyDeploymentFiles
+    helmDryRun.mustRunAfter helmLint
+    helmPackage.mustRunAfter helmDryRun
+}
+
+task helmPushChart(type: Exec) {
+    workingDir = "${project.buildDir}/deployment/helm/synopsys-alert/"
+    standardOutput = new ByteArrayOutputStream()
+    doFirst {
+        if (!project.ext.isSnapshot) {
+            String artifactoryHostName = System.getenv("ARTIFACTORY_HOST");
+            commandLine "curl", "-u", "${project.ext.artifactoryDeployerUsername}:${project.ext.artifactoryDeployerPassword}", "-X", "PUT", "https://${artifactoryHostName}:443/artifactory/sig-cloudnative/synopsys-alert-${project.version}.tgz", "-T", "synopsys-alert-${project.version}.tgz"
+        } else {
+            throw new GradleException("'Can not push SNAPSHOT helm charts'")
+        }
+    }
+    doLast {
+        println standardOutput.toString()
+    }
+}
+
+task helmPushChartBackup(type: Exec) {
+    workingDir = "${project.buildDir}/deployment/helm/synopsys-alert/"
+    standardOutput = new ByteArrayOutputStream()
+    doFirst {
+        if (!project.ext.isSnapshot) {
+            // if we need to setup helm again to push the charts please run the following command to add the repo
+            // helm repo add sig-cloudnative-local https://${System.env.ARTIFACTORY_HOST}/artifactory/sig-cloudnative-local
+            commandLine "helm", "push-artifactory", "${workingDir}/synopsys-alert-${project.version}.tgz", "sig-cloudnative-local", "-u", "${project.ext.artifactoryDeployerUsername}", "-p", "${project.ext.artifactoryDeployerPassword}"
+        } else {
+            throw new GradleException("'Can not push SNAPSHOT helm charts'")
+        }
+    }
+    doLast {
+        println standardOutput.toString()
+    }
+}
+/**
+ * If the build fails with this error, check Artifactory helm repo
+ *
+ * > Task :helmPushChart FAILED
+ * Caching disabled for task ':helmPushChart' because:
+ *   Build cache is disabled
+ * Task ':helmPushChart' is not up-to-date because:
+ *   Task has not declared any outputs despite executing actions.
+ * :helmPushChart (Thread[Execution worker for ':' Thread 2,5,main]) completed. Took 0.003 secs.
+ *
+ * FAILURE: Build failed with an exception.
+ *
+ * * What went wrong:
+ * Execution failed for task ':helmPushChart'.
+ * > execCommand == null!
+ **/

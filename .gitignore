@@ -1,0 +1,38 @@
+# operating system
+.DS_Store
+
+# ide
+.settings/
+.classpath
+.project
+bin/
+.idea
+out/
+*.iml
+*.ipr
+*.iws
+
+# build tool
+.gradle/
+build/
+email/attachments/
+
+classes/
+/log/
+/testDB/
+/src/main/resources/version.txt
+/src/main/resources/about.txt
+/src/test/resources/application.properties
+/src/test/resources/test.properties
+/test-common/src/main/resources/test.properties
+**/test.properties
+/activemq-data/
+*-lastrun.txt
+*-last-search.txt
+ui/node_modules
+/data/
+/data*/
+sonar-project.properties
+.scannerwork/
+/coverage/
+**/data

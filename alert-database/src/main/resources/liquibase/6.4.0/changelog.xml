@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+                   xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-3.3.xsd">
+    <include file="static-distribution-jobs.xml" relativeToChangelogFile="true"/>
+    <include file="migrate-distribution-jobs.xml" relativeToChangelogFile="true"/>
+    <include file="store-blackduck-project-href.xml" relativeToChangelogFile="true"/>
+    <include file="jira-custom-fields.xml" relativeToChangelogFile="true"/>
+    <include file="notification-content-processing-column.xml" relativeToChangelogFile="true"/>
+    <include file="remove-config-groups-table.xml" relativeToChangelogFile="true"/>
+</databaseChangeLog>

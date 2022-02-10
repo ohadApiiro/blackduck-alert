@@ -1,0 +1,104 @@
+import groovy.json.JsonOutput
+import groovy.json.JsonSlurper
+
+ext.moduleName = 'com.synopsys.integration.alert.ui'
+
+task cleanBundles(type: Delete) {
+    doLast {
+        File staticResourcesDirectory = new File('src/main/static')
+        if (staticResourcesDirectory.exists()) {
+            println "Deleting ${staticResourcesDirectory.canonicalPath}"
+            staticResourcesDirectory.deleteDir()
+        }
+    }
+}
+
+task updateNpmVersion(type: Task) {
+    def packageJsonFile = file('package.json')
+    def rootBuildDotGradle = file('../build.gradle')
+
+    inputs.file(packageJsonFile)
+    inputs.file(rootBuildDotGradle)
+    outputs.file(packageJsonFile)
+    outputs.cacheIf { true }
+
+    doLast {
+        def packageSlurper = new JsonSlurper()
+        def packageJson = packageSlurper.parse(packageJsonFile)
+        if (packageJson.version != version) {
+            packageJson.version = version
+
+            final def updatedPackageJson = JsonOutput.toJson(packageJson)
+
+            packageJsonFile.text = JsonOutput.prettyPrint(updatedPackageJson)
+        }
+    }
+}
+
+
+task npmInstallFromCache(type: Exec) {
+    inputs.files('package.json', 'package-lock.json')
+    outputs.dir('node_modules')
+    outputs.cacheIf { true }
+    ignoreExitValue = true
+
+    commandLine 'npm', 'install', '--cache', "${project.buildDir}/npm_cache"
+}
+
+task npmCacheClean(type: Exec, dependsOn: [npmInstallFromCache]) {
+    inputs.file('package.json')
+    inputs.file('package-lock.json')
+    outputs.dir('node_modules')
+    outputs.cacheIf { true }
+    onlyIf {
+        // don't run this if the npmInstallFromCache succeeded
+        tasks.npmInstallFromCache?.getExecResult()?.exitValue ?: 0 != 0
+    }
+
+    commandLine 'npm', 'cache', 'clean', '--force', '--cache', "${project.buildDir}/npm_cache"
+}
+
+task npmInstallFromCacheRetry(type: Exec, dependsOn: [npmCacheClean]) {
+    inputs.file('package.json')
+    inputs.file('package-lock.json')
+    outputs.dir('node_modules')
+    outputs.cacheIf { true }
+    onlyIf {
+        // don't run this if the npmInstall succeeded
+        tasks.npmInstallFromCache?.getExecResult()?.exitValue ?: 0 != 0
+    }
+    doFirst {
+        logger.error('The initial npm install failed. Trying to run the npm install again.')
+    }
+
+    commandLine 'npm', 'install', '--cache', "${project.buildDir}/npm_cache"
+}
+
+task npmBuild(type: Exec, dependsOn: [npmInstallFromCacheRetry]) {
+    inputs.file('package-lock.json')
+    inputs.dir('src/main/js')
+    inputs.dir('src/main/css')
+    inputs.dir('src/main/img')
+    outputs.dir("${project.buildDir}/resources/main/static")
+    outputs.cacheIf { true }
+
+    commandLine 'npm', 'run', 'build', '--cache', "${project.buildDir}/npm_cache"
+}
+
+task copyStaticWebContent(type: Copy) {
+    outputs.cacheIf { true }
+
+    from("${project.projectDir}/src/main/css") {
+        into 'css'
+    }
+    from("${project.projectDir}/src/main/img") {
+        into 'img'
+    }
+    into "${project.buildDir}/resources/main/static"
+}
+
+tasks.copyStaticWebContent.finalizedBy(updateNpmVersion)
+tasks.copyStaticWebContent.finalizedBy(npmBuild)
+tasks.npmBuild.mustRunAfter(updateNpmVersion)
+tasks.npmBuild.mustRunAfter(copyStaticWebContent)
+tasks.clean.finalizedBy(cleanBundles)
